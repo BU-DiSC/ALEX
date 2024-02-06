@@ -31,7 +31,7 @@
  * --time_limit             time limit, in minutes
  * --print_batch_stats      whether to output stats for each batch
  */
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   auto flags = parse_flags(argc, argv);
   std::string keys_file_path = get_required(flags, "keys_file");
   std::string keys_file_type = get_required(flags, "keys_file_type");
@@ -43,7 +43,6 @@ int main(int argc, char *argv[]) {
       get_with_default(flags, "lookup_distribution", "zipf");
   auto time_limit = stod(get_with_default(flags, "time_limit", "0.5"));
   bool print_batch_stats = get_boolean_flag(flags, "print_batch_stats");
-  bool bulk_load = get_boolean_flag(flags, "bulk_load");
 
   // Read keys from file
   auto keys = new KEY_TYPE[total_num_keys];
@@ -65,24 +64,11 @@ int main(int argc, char *argv[]) {
     values[i].second = static_cast<PAYLOAD_TYPE>(gen_payload());
   }
 
-  auto load_start_time = std::chrono::high_resolution_clock::now();
-  std::cout << std::scientific;
-  std::cout << std::setprecision(3);
-// Create ALEX and load
+  // Create ALEX and bulk load
   alex::Alex<KEY_TYPE, PAYLOAD_TYPE> index;
-  if (bulk_load) {
-    std::sort(values, values + init_num_keys,
-              [](auto const &a, auto const &b) { return a.first < b.first; });
-    index.bulk_load(values, init_num_keys);
-  } else {
-    for (auto idx = 0; idx < init_num_keys; idx++) {
-      index.insert(keys[idx], values[idx].second);
-    }
-  }
-  double load_elapsed_time =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::high_resolution_clock::now() - load_start_time)
-          .count();
+  std::sort(values, values + init_num_keys,
+            [](auto const& a, auto const& b) { return a.first < b.first; });
+  index.bulk_load(values, init_num_keys);
 
   // Run workload
   int i = init_num_keys;
@@ -96,13 +82,15 @@ int main(int argc, char *argv[]) {
   auto workload_start_time = std::chrono::high_resolution_clock::now();
   int batch_no = 0;
   PAYLOAD_TYPE sum = 0;
+  std::cout << std::scientific;
+  std::cout << std::setprecision(3);
   while (true) {
     batch_no++;
 
     // Do lookups
     double batch_lookup_time = 0.0;
     if (i > 0) {
-      KEY_TYPE *lookup_keys = nullptr;
+      KEY_TYPE* lookup_keys = nullptr;
       if (lookup_distribution == "uniform") {
         lookup_keys = get_search_keys(keys, i, num_lookups_per_batch);
       } else if (lookup_distribution == "zipf") {
@@ -115,7 +103,7 @@ int main(int argc, char *argv[]) {
       auto lookups_start_time = std::chrono::high_resolution_clock::now();
       for (int j = 0; j < num_lookups_per_batch; j++) {
         KEY_TYPE key = lookup_keys[j];
-        PAYLOAD_TYPE *payload = index.get_payload(key);
+        PAYLOAD_TYPE* payload = index.get_payload(key);
         if (payload) {
           sum += *payload;
         }
@@ -191,10 +179,7 @@ int main(int argc, char *argv[]) {
             << " lookups/sec,\t"
             << cumulative_inserts / cumulative_insert_time * 1e9
             << " inserts/sec,\t"
-            << cumulative_operations / cumulative_time * 1e9
-            << " ops/sec,\t"
-            << load_elapsed_time / 1e9
-            << " sec loadtime"
+            << cumulative_operations / cumulative_time * 1e9 << " ops/sec"
             << std::endl;
 
   delete[] keys;
